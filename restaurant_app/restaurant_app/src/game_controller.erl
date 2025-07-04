@@ -17,15 +17,19 @@ handle_call(start_game, _From, State) ->
     % Load configuration based on difficulty
     %load_configuration(maps:get(difficulty, State)),
     
-    % Start restaurant components
-    start_restaurant_components(),
-    
-    % Start customer generation
-    poisson_gen:start(),
-    poisson_gen:spawn_clients(3, 2000),
-    
-    io:format("Game started with difficulty: ~p~n", [maps:get(difficulty, State)]),
-    {reply, ok, State#{game_state := running}};
+    % Start restaurant components using restaurant supervisor
+    case restaurant_sup:start_restaurant() of
+        {ok, RestaurantState} ->
+            % Start customer generation
+            poisson_gen:start(),
+            poisson_gen:spawn_clients(3, 2000),
+            
+            io:format("Game started with difficulty: ~p~n", [maps:get(difficulty, State)]),
+            {reply, ok, State#{game_state := running, restaurant_state => RestaurantState}};
+        {error, Reason} ->
+            io:format("Failed to start restaurant: ~p~n", [Reason]),
+            {reply, {error, Reason}, State}
+    end;
 
 handle_call(pause_game, _From, State) ->
     case maps:get(game_state, State) of
@@ -48,6 +52,9 @@ handle_call(resume_game, _From, State) ->
 handle_call(stop_game, _From, State) ->
     % Stop customer generation
     poisson_gen:stop(),
+    
+    % Stop restaurant components
+    restaurant_sup:stop_restaurant(),
     
     % Reset game state
     io:format("Game stopped~n"),
@@ -114,35 +121,8 @@ code_change(_OldVsn, State, _Extra) ->
 
 % Start restaurant components
 start_restaurant_components() ->
-    % Start tables
-    MaxTables = application:get_env(table, max_tables, 5),
-    start_tables(MaxTables),
-    
-    % Start waiters
-    MaxWaiters = application:get_env(table, max_waiters, 3),
-    start_waiters(MaxWaiters),
-    
-    % Start kitchen machines
-    MaxMachines = application:get_env(machine, max_machines, 3),
-    start_machines(MaxMachines).
-
-start_tables(0) -> ok;
-start_tables(N) ->
-    TableId = list_to_atom("table_" ++ integer_to_list(N)),
-    table_sup:start_table(TableId),
-    start_tables(N - 1).
-
-start_waiters(0) -> ok;
-start_waiters(N) ->
-    WaiterId = list_to_atom("waiter_" ++ integer_to_list(N)),
-    waiter_sup:start_waiter(WaiterId),
-    start_waiters(N - 1).
-
-start_machines(0) -> ok;
-start_machines(N) ->
-    MachineId = list_to_atom("machine_" ++ integer_to_list(N)),
-    machine_sup:start_cook(MachineId),
-    start_machines(N - 1).
+    % This function is now handled by restaurant_sup:start_restaurant()
+    restaurant_sup:start_restaurant().
 
 % Public API
 start_game() ->

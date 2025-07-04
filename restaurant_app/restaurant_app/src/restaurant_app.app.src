@@ -1,14 +1,37 @@
 {application, restaurant_app, [
-    {description, "An OTP application"},
+    {description, "Restaurant Simulation Game - An OTP application"},
     {vsn, "0.1.0"},
-    {registered, []},
+    {registered, [main_sup, gui_sup, game_controller, host, web_server, restaurant_sup, customer_sup, restaurant_state]},
     {mod, {restaurant_app, []}},
     {applications, [
         kernel,
-        stdlib
+        stdlib,
+        ranch,
+        cowboy
     ]},
     {env, []},
-    {modules, []},
+    {modules, [
+        restaurant_app,
+        main_sup,
+        gui_sup,
+        game_controller,
+        host,
+        web_server,
+        web_handler,
+        websocket_handler,
+        restaurant_sup,
+        table_sup,
+        waiter_sup,
+        machine_sup,
+        table_fsm,
+        waiter_fsm,
+        machine_fsm,
+        table_registry,
+        customer_sup,
+        customer_fsm,
+        poisson_gen,
+        restaurant_state
+    ]},
     {licenses, ["Apache-2.0"]},
     {links, []}
  ]}.

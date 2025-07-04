@@ -8,7 +8,8 @@
 -export([idle/3, taking_order/3, serving/3, collecting_payment/3]).
 
 start_link(WaiterId) ->
-    gen_statem:start_link({local, ?MODULE}, ?MODULE, WaiterId, []).
+    Name = list_to_atom("waiter_fsm_" ++ atom_to_list(WaiterId)),
+    gen_statem:start_link({local, Name}, ?MODULE, WaiterId, []).
 
 init(WaiterId) ->
     {ok, idle, #{waiter_id => WaiterId, current_table => undefined, current_order => undefined}}.
@@ -18,7 +19,13 @@ callback_mode() ->
 
 % State: idle - waiter is available
 idle(cast, {take_order, Table, Order}, State) ->
-    {next_state, taking_order, State#{current_table := Table, current_order := Order}};
+    NewState = State#{current_table := Table, current_order := Order},
+    restaurant_state:update_waiter_state(maps:get(waiter_id, State), #{
+        state => taking_order,
+        position => {150, 200},
+        current_table => Table
+    }),
+    {next_state, taking_order, NewState};
 
 idle(EventType, EventContent, State) ->
     handle_event(EventType, EventContent, State).
@@ -27,7 +34,13 @@ idle(EventType, EventContent, State) ->
 taking_order(cast, {order_taken, Order}, State) ->
     % Send order to kitchen
     task_queue:add_task({cook_order, Order}),
-    {next_state, idle, State#{current_table := undefined, current_order := undefined}};
+    NewState = State#{current_table := undefined, current_order := undefined},
+    restaurant_state:update_waiter_state(maps:get(waiter_id, State), #{
+        state => idle,
+        position => {150, 200},
+        current_table => undefined
+    }),
+    {next_state, idle, NewState};
 
 taking_order(EventType, EventContent, State) ->
     handle_event(EventType, EventContent, State).
@@ -59,10 +72,13 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 
 % Public API
 take_order(WaiterId, {Table, Order}) ->
-    gen_statem:cast(?MODULE, {take_order, Table, Order}).
+    Name = list_to_atom("waiter_fsm_" ++ atom_to_list(WaiterId)),
+    gen_statem:cast(Name, {take_order, Table, Order}).
 
 serve_food(WaiterId, {Table, Food}) ->
-    gen_statem:cast(?MODULE, {serve_food, Table, Food}).
+    Name = list_to_atom("waiter_fsm_" ++ atom_to_list(WaiterId)),
+    gen_statem:cast(Name, {serve_food, Table, Food}).
 
 collect_payment(WaiterId, {Table, Amount}) ->
-    gen_statem:cast(?MODULE, {collect_payment, Table, Amount}). 
+    Name = list_to_atom("waiter_fsm_" ++ atom_to_list(WaiterId)),
+    gen_statem:cast(Name, {collect_payment, Table, Amount}). 

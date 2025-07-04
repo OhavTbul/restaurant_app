@@ -7,11 +7,12 @@
 % States
 -export([idle/3, machineing/3]).
 
-start_link(machineId) ->
-    gen_statem:start_link({local, ?MODULE}, ?MODULE, machineId, []).
+start_link(MachineId) ->
+    Name = list_to_atom("machine_fsm_" ++ atom_to_list(MachineId)),
+    gen_statem:start_link({local, Name}, ?MODULE, MachineId, []).
 
-init(machineId) ->
-    {ok, idle, #{machine_id => machineId, current_order => undefined}}.
+init(MachineId) ->
+    {ok, idle, #{machine_id => MachineId, current_order => undefined}}.
 
 callback_mode() ->
     state_functions.
@@ -20,7 +21,13 @@ callback_mode() ->
 idle(cast, {machine_order, Order}, State) ->
     % Simulate machineing time
     timer:send_after(2000, {machineing_done, Order}),
-    {next_state, machineing, State#{current_order := Order}};
+    NewState = State#{current_order := Order},
+    restaurant_state:update_machine_state(maps:get(machine_id, State), #{
+        state => cooking,
+        position => {200, 300},
+        current_order => Order
+    }),
+    {next_state, machineing, NewState};
 
 idle(EventType, EventContent, State) ->
     handle_event(EventType, EventContent, State).
@@ -29,7 +36,13 @@ idle(EventType, EventContent, State) ->
 machineing(info, {machineing_done, Order}, State) ->
     % Notify that food is ready
     io:format("machine ~p finished machineing order: ~p~n", [maps:get(machine_id, State), Order]),
-    {next_state, idle, State#{current_order := undefined}};
+    NewState = State#{current_order := undefined},
+    restaurant_state:update_machine_state(maps:get(machine_id, State), #{
+        state => idle,
+        position => {200, 300},
+        current_order => undefined
+    }),
+    {next_state, idle, NewState};
 
 machineing(EventType, EventContent, State) ->
     handle_event(EventType, EventContent, State).
@@ -46,8 +59,10 @@ code_change(_OldVsn, StateName, State, _Extra) ->
     {ok, StateName, State}.
 
 % Public API
-machine_order(machineId, Order) ->
-    gen_statem:cast(?MODULE, {machine_order, Order}).
+machine_order(MachineId, Order) ->
+    Name = list_to_atom("machine_fsm_" ++ atom_to_list(MachineId)),
+    gen_statem:cast(Name, {machine_order, Order}).
 
-finish_machineing(machineId, Order) ->
-    gen_statem:cast(?MODULE, {finish_machineing, Order}). 
+finish_machineing(MachineId, Order) ->
+    Name = list_to_atom("machine_fsm_" ++ atom_to_list(MachineId)),
+    gen_statem:cast(Name, {finish_machineing, Order}). 

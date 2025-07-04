@@ -9,5 +9,5 @@ start_link() ->
 init([]) ->
     {ok, {{one_for_one, 5, 10}, [
         {game_controller, {game_controller, start_link, []}, permanent, 5000, worker, [game_controller]},
-        {gui_frame, {gui_frame, start_link, []}, permanent, 5000, worker, [gui_frame]}
+        {web_server, {web_server, start_link, []}, permanent, 5000, worker, [web_server]}
     ]}}. 

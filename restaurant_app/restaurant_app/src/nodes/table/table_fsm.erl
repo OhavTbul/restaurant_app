@@ -8,7 +8,8 @@
 -export([available/3, occupied/3, reserved/3]).
 
 start_link(TableId) ->
-    gen_statem:start_link({local, {table_fsm, TableId}}, ?MODULE, TableId, []).
+    Name = list_to_atom("table_fsm_" ++ atom_to_list(TableId)),
+    gen_statem:start_link({local, Name}, ?MODULE, TableId, []).
 
 init(TableId) ->
     io:format("Table ~p initialized as available~n", [TableId]),
@@ -20,11 +21,23 @@ callback_mode() ->
 % State: available - table is free for customers
 available(cast, {reserve_table, CustomerId}, State) ->
     io:format("Table ~p reserved for customer ~p~n", [maps:get(table_id, State), CustomerId]),
-    {next_state, reserved, State#{customer_id := CustomerId}};
+    NewState = State#{customer_id := CustomerId},
+    restaurant_state:update_table_state(maps:get(table_id, State), #{
+        occupied => false, 
+        customer => CustomerId, 
+        position => maps:get(position, State)
+    }),
+    {next_state, reserved, NewState};
 
 available(cast, {seat_customer, CustomerId}, State) ->
     io:format("Customer ~p seated at table ~p~n", [CustomerId, maps:get(table_id, State)]),
-    {next_state, occupied, State#{customer_id := CustomerId}};
+    NewState = State#{customer_id := CustomerId},
+    restaurant_state:update_table_state(maps:get(table_id, State), #{
+        occupied => true, 
+        customer => CustomerId, 
+        position => maps:get(position, State)
+    }),
+    {next_state, occupied, NewState};
 
 available(EventType, EventContent, State) ->
     handle_event(EventType, EventContent, State).
@@ -34,7 +47,13 @@ occupied(cast, {free_table, CustomerId}, State) ->
     case maps:get(customer_id, State) of
         CustomerId ->
             io:format("Table ~p freed by customer ~p~n", [maps:get(table_id, State), CustomerId]),
-            {next_state, available, State#{customer_id := undefined}};
+            NewState = State#{customer_id := undefined},
+            restaurant_state:update_table_state(maps:get(table_id, State), #{
+                occupied => false, 
+                customer => undefined, 
+                position => maps:get(position, State)
+            }),
+            {next_state, available, NewState};
         _ ->
             io:format("Table ~p: unauthorized free attempt by ~p~n", [maps:get(table_id, State), CustomerId]),
             {keep_state, State}
@@ -81,10 +100,13 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 
 % Public API
 reserve_table(TableId, CustomerId) ->
-    gen_statem:cast({table_fsm, TableId}, {reserve_table, CustomerId}).
+    Name = list_to_atom("table_fsm_" ++ atom_to_list(TableId)),
+    gen_statem:cast(Name, {reserve_table, CustomerId}).
 
 seat_customer(TableId, CustomerId) ->
-    gen_statem:cast({table_fsm, TableId}, {seat_customer, CustomerId}).
+    Name = list_to_atom("table_fsm_" ++ atom_to_list(TableId)),
+    gen_statem:cast(Name, {seat_customer, CustomerId}).
 
 free_table(TableId) ->
-    gen_statem:cast({table_fsm, TableId}, {free_table, TableId}).
+    Name = list_to_atom("table_fsm_" ++ atom_to_list(TableId)),
+    gen_statem:cast(Name, {free_table, TableId}).
