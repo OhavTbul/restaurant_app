@@ -37,7 +37,7 @@ init([]) ->
     MaxRestarts = 5,
     MaxTime = 10,
 
-    {ok, {{RestartStrategy, MaxRestarts, MaxTime}, [ChildSpec]}, #state{}}.
+    {ok, {{RestartStrategy, MaxRestarts, MaxTime}, [ChildSpec]}}.
 
 %%%===================
 %%% Start & Restart Customers
